@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#2f6b4f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icone-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Suivi de la semaine · Forme 50+</title>
+<style>
+  :root {
+    --bg: #f7f5f0; --card: #ffffff; --ink: #1f2420; --muted: #5d655f;
+    --accent: #2f6b4f; --accent-soft: #e3efe8; --warn: #9a4a12; --warn-soft: #fbeee2;
+    --line: #d9dcd6; --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 18px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 18px 80px; }
+  h1 { font-size: 1.7rem; margin: 8px 0 4px; }
+  h2 { font-size: 1.3rem; margin: 0 0 12px; color: var(--accent); }
+  .sub { color: var(--muted); margin: 0 0 18px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin-bottom: 18px; }
+  .chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .chiffre { background: var(--bg); border-radius: 10px; padding: 12px; }
+  .chiffre b { display: block; font-size: 1.35rem; }
+  .chiffre span { font-size: .85rem; color: var(--muted); }
+  .field { margin-bottom: 18px; }
+  .field > label, .field > .q { display: block; font-weight: 600; margin-bottom: 6px; }
+  .hint { color: var(--muted); font-size: .9rem; margin: -2px 0 8px; }
+  input[type=number] { width: 100%; font: inherit; padding: 11px 12px; border: 1.5px solid var(--line); border-radius: 10px; }
+  input:focus { outline: 3px solid var(--accent-soft); border-color: var(--accent); }
+  .pesees { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .pesees input { padding: 10px 4px; text-align: center; font-size: .95rem; }
+  .pesees small { display: block; text-align: center; color: var(--muted); font-size: .75rem; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .echelle { display: flex; gap: 6px; }
+  .echelle label { flex: 1; text-align: center; border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 0; cursor: pointer; }
+  .echelle label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+  .echelle input { display: none; }
+  button, .btn { font: inherit; font-weight: 600; padding: 12px 20px; border-radius: 10px; cursor: pointer; border: 1.5px solid var(--accent); text-decoration: none; display: inline-block; }
+  .primary { background: var(--accent); color: #fff; }
+  .secondary { background: #fff; color: var(--accent); }
+  .decision { border-left: 5px solid var(--accent); }
+  .decision.warn { border-left-color: var(--warn); }
+  .decision h3 { margin: 0 0 6px; font-size: 1.2rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-size: .8rem; font-weight: 600; }
+  .muted { color: var(--muted); font-size: .9rem; }
+  .error { color: var(--warn); display: none; margin-top: 8px; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+  @media (max-width: 480px) { .row { grid-template-columns: 1fr; } .pesees { grid-template-columns: repeat(4, 1fr); } }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script src="donnees.js"></script>
+<script src="moteur.js"></script>
+<script src="stockage.js"></script>
+<script>
+  const CLE = 'forme50-suivi';
+  const bilan = JSON.parse(localStorage.getItem('forme50-bilan') || 'null');
+  const app = document.getElementById('app');
+  const fr = n => Number(n).toLocaleString('fr-FR');
+  const kg = n => n == null ? '—' : String(n).replace('.', ',');
+  const esc = s => String(s ?? '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+  const charger = () => JSON.parse(localStorage.getItem(CLE) || '{"semaines":[],"ajustements":[]}');
+  const enregistrer = s => localStorage.setItem(CLE, JSON.stringify(s));
+
+  const echelle = (nom, gauche, droite) => `
+    <div class="echelle">${[1, 2, 3, 4, 5].map(v => `<label><input type="radio" name="${nom}" value="${v}" required>${v}</label>`).join('')}</div>
+    <p class="hint" style="display:flex;justify-content:space-between;margin-top:4px"><span>${gauche}</span><span>${droite}</span></p>`;
+
+
+  // ---------- Progrès en force, à partir du carnet de séance (§ 28) ----------
+  function progresForce() {
+    const carnet = JSON.parse(localStorage.getItem('forme50-carnet') || '{"seances":[]}');
+    const parExo = {};
+    for (const s of carnet.seances) for (const e of s.exos) {
+      if (e.calibration || !e.series.length) continue;
+      const kgMax = Math.max(...e.series.map(x => x.kg || 0)), repsMax = Math.max(...e.series.map(x => x.reps || 0));
+      (parExo[e.id] ??= []).push({ date: s.date, kg: kgMax, reps: repsMax });
+    }
+    const lignes = Object.entries(parExo).filter(([, h]) => h.length).map(([id, h]) => {
+      const ex = Forme50.EXERCICES.find(x => x.id === id), a = h[0], b = h[h.length - 1];
+      const val = x => x.kg ? `${kg(x.kg)} kg × ${x.reps}` : `${x.reps}`;
+      const mieux = (b.kg || 0) > (a.kg || 0) || ((b.kg || 0) === (a.kg || 0) && b.reps > a.reps);
+      return `<tr><td>${esc(ex ? ex.nom : id)}</td><td>${val(a)}</td><td><b>${val(b)}</b>${mieux ? ' ↑' : ''}</td></tr>`;
+    });
+    if (!lignes.length) return `<section><h2>Vos progrès en force</h2><p class="muted">Ils apparaîtront ici dès vos premières séances notées dans le carnet.</p></section>`;
+    return `<section><h2>Vos progrès en force</h2><table><thead><tr><th>Exercice</th><th>Au début</th><th>Aujourd'hui</th></tr></thead><tbody>${lignes.join('')}</tbody></table></section>`;
+  }
+
+  // ---------- Retests toutes les 4 semaines (§ 26) ----------
+  const CLE_RETESTS = 'forme50-retests';
+  let messageRetest = '';
+  function retests() {
+    const liste = JSON.parse(localStorage.getItem(CLE_RETESTS) || '[]');
+    const carnet = JSON.parse(localStorage.getItem('forme50-carnet') || '{"seances":[]}');
+    const reference = liste.length ? liste[liste.length - 1].date : (carnet.seances[0] && carnet.seances[0].date);
+    const jours = reference ? Math.floor((new Date() - new Date(reference)) / 864e5) : 0;
+    const du = reference && jours >= 28;
+    const dernier = liste[liste.length - 1];
+    const ligne = (nom, avant, apres) => `<tr><td>${nom}</td><td>${avant ?? '—'}</td><td><b>${apres ?? '—'}</b></td></tr>`;
+    const comparaison = dernier ? `<table><thead><tr><th>Test</th><th>Bilan</th><th>${new Date(dernier.date).toLocaleDateString('fr-FR')}</th></tr></thead><tbody>
+      ${ligne('Assis-debout 30 s', bilan.testChaiseImpossible ? 'impossible' : bilan.testChaise, dernier.chaise)}
+      ${ligne('Équilibre sur un pied', bilan.testEquilibre ? bilan.testEquilibre + ' s' : null, dernier.equilibre != null ? dernier.equilibre + ' s' : null)}
+      ${ligne('Pompes', bilan.testPompes ? `${bilan.testPompes} (${bilan.testPompesVariante})` : null, dernier.pompes != null ? `${dernier.pompes} (${dernier.pompesVariante})` : null)}
+      ${ligne('Gainage', bilan.testGainage ? `${bilan.testGainage} s (${bilan.testGainageVariante})` : null, dernier.gainage != null ? `${dernier.gainage} s (${dernier.gainageVariante})` : null)}
+      </tbody></table>` : '';
+    return `<section><h2>Refaire les tests</h2>
+      ${du ? '<p class="decision" style="padding:10px 14px;border-left:5px solid var(--accent)"><b>C\'est le moment</b> : 4 semaines depuis les derniers tests.</p>' : '<p class="muted">Tous les 28 jours. C\'est la preuve la plus parlante de vos progrès.</p>'}
+      ${messageRetest ? `<p class="decision" style="padding:10px 14px;border-left:5px solid var(--accent)">${esc(messageRetest)}</p>` : ''}
+      ${comparaison}
+      <details ${du ? 'open' : ''}><summary style="cursor:pointer;font-weight:600;margin:8px 0">Saisir de nouveaux résultats</summary>
+      <form id="retest" class="row" style="margin-top:10px">
+        <div class="field"><label>Assis-debout (levers en 30 s)</label><input type="number" name="chaise" min="0" max="50"></div>
+        <div class="field"><label>Équilibre (secondes, max 45)</label><input type="number" name="equilibre" min="0" max="45"></div>
+        <div class="field"><label>Pompes : variante</label><select name="pompesVariante" style="width:100%;font:inherit;padding:10px;border-radius:10px;border:1.5px solid var(--line)"><option value="mur">Mur</option><option value="table">Table</option><option value="genoux">Genoux</option><option value="sol">Sol</option></select></div>
+        <div class="field"><label>Pompes : nombre</label><input type="number" name="pompes" min="0" max="100"></div>
+        <div class="field"><label>Gainage : variante</label><select name="gainageVariante" style="width:100%;font:inherit;padding:10px;border-radius:10px;border:1.5px solid var(--line)"><option value="genoux">Genoux</option><option value="pieds">Pieds</option></select></div>
+        <div class="field"><label>Gainage : secondes</label><input type="number" name="gainage" min="0" max="600"></div>
+        <button type="submit" class="primary">Enregistrer les tests</button>
+      </form></details></section>`;
+  }
+  function brancherRetests() {
+    const f = document.getElementById('retest');
+    if (!f) return;
+    f.onsubmit = e => {
+      e.preventDefault();
+      const v = n => f.elements[n].value === '' ? null : Number(f.elements[n].value);
+      const r = { date: new Date().toISOString().slice(0, 10), chaise: v('chaise'), equilibre: v('equilibre'), pompesVariante: f.elements.pompesVariante.value, pompes: v('pompes'), gainageVariante: f.elements.gainageVariante.value, gainage: v('gainage') };
+      if ([r.chaise, r.equilibre, r.pompes, r.gainage].every(x => x == null)) return;
+      const l = JSON.parse(localStorage.getItem(CLE_RETESTS) || '[]');
+      const exos = () => { const p = Forme50.genererProgramme(bilan, { retests: l, carnet: Forme50.stockage.lire('carnet') }).seances; return [...p.A.exercices, ...p.B.exercices]; };
+      const avant = exos();
+      l.push(r); localStorage.setItem(CLE_RETESTS, JSON.stringify(l));
+      const nouveaux = [...new Set(exos().filter(e => !avant.some(a => a.id === e.id)).map(e => e.nom))];
+      messageRetest = nouveaux.length ? `Tests enregistrés. Vos progrès font évoluer le programme : ${nouveaux.join(', ')}. Ils sont déjà dans le programme et le carnet.` : 'Tests enregistrés. Les exercices restent les mêmes : continuez la progression des charges dans le carnet.';
+      rendu(); window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    };
+  }
+
+  function rendu() {
+    if (!bilan || !bilan.prenom) {
+      app.innerHTML = `<h1>Suivi</h1><section><p>Aucun bilan trouvé sur cet appareil.</p><a class="btn secondary" href="index.html">Remplir le bilan de départ</a></section>`;
+      return;
+    }
+    const suivi = charger();
+    const analyse = Forme50.analyserSuivi(bilan, suivi);
+    const c = analyse.cibles;
+    const n = suivi.semaines.length;
+    const dec = analyse.decision;
+    const dejaApplique = dec && suivi.ajustements.some(a => a.semaine === n && a.type === dec.type);
+    const alerte = dec && ['medecin', 'verifier_respect', 'manger_plus'].includes(dec.type);
+
+    app.innerHTML = `
+      <h1>Le suivi ${/^[aeiouyàâéèêëîïôöùûüh]/i.test(bilan.prenom) ? "d'" : 'de '}${esc(bilan.prenom)}</h1>
+      <p class="sub">Une fois par semaine, toujours le même jour. Deux minutes suffisent.</p>
+      <div class="actions"><a class="btn secondary" href="programme.html">Voir le programme</a> <a class="btn secondary" href="seance.html">Carnet de séance</a></div>
+
+      <section>
+        <h2>Vos objectifs ${n ? 'pour la semaine ' + (n + 1) : 'de départ'}</h2>
+        <div class="chiffres">
+          ${c.mode === 'perte' ? `<div class="chiffre"><b>${fr(c.kcal)} kcal</b><span>par jour${c.pause ? ' (semaine à l\'équilibre)' : ''}</span></div>` : ''}
+          ${c.proteines ? `<div class="chiffre"><b>${c.proteines} g</b><span>de protéines par jour</span></div>` : ''}
+          <div class="chiffre"><b>${fr(c.pas)} pas</b><span>par jour en moyenne</span></div>
+        </div>
+      </section>
+
+      ${dec ? `
+      <section class="decision ${alerte ? 'warn' : ''}">
+        <h3>${esc(dec.titre)}</h3>
+        <p>${esc(dec.texte)}</p>
+        ${analyse.depuisDebut != null ? `<p class="muted">Depuis le début : ${analyse.depuisDebut > 0 ? '+' : ''}${kg(analyse.depuisDebut)} kg${analyse.tailleDepuisDebut != null ? ` et ${analyse.tailleDepuisDebut > 0 ? '+' : ''}${kg(analyse.tailleDepuisDebut)} cm de tour de taille` : ''}.</p>` : ''}
+        ${dec.applicable && !dejaApplique ? `<button class="primary" id="appliquer">Appliquer cet ajustement</button>` : ''}
+        ${dejaApplique ? `<p class="muted"><b>Ajustement appliqué.</b> Les objectifs ci-dessus en tiennent compte.</p>` : ''}
+      </section>` : ''}
+
+      <section>
+        <h2>Semaine ${n + 1}</h2>
+        <form id="form" novalidate>
+          <div class="field">
+            <span class="q">Poids du matin, à jeun (kg)</span>
+            <p class="hint">Au moins 3 pesées dans la semaine. On regarde la moyenne, jamais une pesée seule.</p>
+            <div class="pesees">${['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(j => `<div><input type="number" step="0.1" min="35" max="250" name="pesee"><small>${j}</small></div>`).join('')}</div>
+          </div>
+          <div class="row">
+            <div class="field"><label for="taille">Tour de taille (cm)</label><p class="hint">Au niveau du nombril.</p><input type="number" step="0.5" min="50" max="200" id="taille" name="taille" required></div>
+            <div class="field"><label for="pas">Pas par jour, en moyenne</label><p class="hint">Lu sur le téléphone.</p><input type="number" step="100" min="0" max="40000" id="pas" name="pas" required></div>
+          </div>
+          <div class="field"><label for="respect">Programme suivi à… (%)</label><p class="hint">Honnêtement : repas, séances, alcool. 100 % = tout suivi.</p><input type="number" step="10" min="0" max="100" id="respect" name="respect" required></div>
+          <div class="field"><span class="q">Faim</span>${echelle('faim', 'pas de faim', 'faim très forte')}</div>
+          <div class="field"><span class="q">Énergie</span>${echelle('energie', 'épuisé·e', 'en pleine forme')}</div>
+          <div class="field"><span class="q">Sommeil</span>${echelle('sommeil', 'très mauvais', 'excellent')}</div>
+          <button type="submit" class="primary">Enregistrer la semaine</button>
+          <p class="error" id="error"></p>
+        </form>
+      </section>
+
+      ${n ? `
+      <section>
+        <h2>Historique</h2>
+        <table>
+          <thead><tr><th>Semaine</th><th>Poids moyen</th><th>Tour de taille</th><th>Pas</th><th>Suivi</th></tr></thead>
+          <tbody>${suivi.semaines.map((s, i) => `<tr><td>${i + 1}</td><td>${kg(Math.round(Forme50.moyenne(s.pesees) * 10) / 10)} kg</td><td>${kg(s.taille)} cm</td><td>${fr(s.pas)}</td><td>${s.respect} %</td></tr>`).reverse().join('')}</tbody>
+        </table>
+        ${suivi.ajustements.length ? `<p class="muted">Ajustements : ${suivi.ajustements.map(a => `après la semaine ${a.semaine}, ${a.type === 'plus_de_pas' ? `+${fr(a.pas)} pas` : a.type === 'semaine_equilibre' ? 'semaine à l\'équilibre' : `${a.kcal > 0 ? '+' : ''}${a.kcal} kcal`}`).join(' ; ')}.</p>` : ''}
+        <p><button class="secondary" id="annuler">Supprimer la dernière semaine</button></p>
+      </section>` : ''}
+
+      ${progresForce()}
+      ${retests()}
+      <section><h2>Sauvegarder vos données</h2>
+        <p class="muted">Tout reste sur ce téléphone : rien n'est envoyé. Si le navigateur est vidé ou si vous changez d'appareil, tout serait perdu. Une sauvegarde par mois suffit (gardez le fichier, par exemple en l'envoyant par e-mail à vous-même).</p>
+        <div class="actions"><button class="secondary" id="sauvegarder">Télécharger une sauvegarde</button>
+        <label class="btn secondary" style="cursor:pointer">Restaurer une sauvegarde<input type="file" accept="application/json,.json" id="restaurer" hidden></label></div>
+        <p class="error" id="erreurRestaurer"></p></section>
+      <p class="muted">Les ajustements suivent les règles de la base scientifique (§ 24, § 26).</p>`;
+    brancherRetests();
+    document.getElementById('sauvegarder').onclick = () => Forme50.stockage.telecharger();
+    document.getElementById('restaurer').onchange = e => {
+      const f = e.target.files[0]; if (!f) return;
+      if (!confirm('Remplacer les données de cet appareil par celles de la sauvegarde ?')) return;
+      Forme50.stockage.restaurer(f).then(() => location.reload()).catch(err => { const el = document.getElementById('erreurRestaurer'); el.textContent = err.message; el.style.display = 'block'; });
+    };
+
+    document.getElementById('form').onsubmit = e => {
+      e.preventDefault();
+      const f = e.target;
+      const pesees = [...f.querySelectorAll('[name=pesee]')].map(i => Number(i.value)).filter(v => v > 0);
+      const val = nom => f.elements[nom].value;
+      const erreur = msg => { const el = document.getElementById('error'); el.textContent = msg; el.style.display = 'block'; };
+      if (pesees.length < 3) return erreur('Il faut au moins 3 pesées dans la semaine.');
+      if (!val('taille') || !val('pas') || val('respect') === '') return erreur('Il manque le tour de taille, les pas ou le pourcentage de suivi.');
+      if (!val('faim') || !val('energie') || !val('sommeil')) return erreur('Il manque une note (faim, énergie ou sommeil).');
+      const s = charger();
+      s.semaines.push({ pesees, taille: Number(val('taille')), pas: Number(val('pas')), respect: Math.min(100, Number(val('respect'))),
+        faim: Number(val('faim')), energie: Number(val('energie')), sommeil: Number(val('sommeil')), le: new Date().toISOString().slice(0, 10) });
+      enregistrer(s); rendu(); window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const btn = document.getElementById('appliquer');
+    if (btn) btn.onclick = () => {
+      const s = charger();
+      s.ajustements.push({ semaine: n, type: dec.type, kcal: dec.kcal, pas: dec.pas });
+      enregistrer(s); rendu();
+    };
+
+    const annuler = document.getElementById('annuler');
+    if (annuler) annuler.onclick = () => {
+      if (!confirm('Supprimer la dernière semaine saisie ?')) return;
+      const s = charger();
+      const derniere = s.semaines.length;
+      s.semaines.pop();
+      s.ajustements = s.ajustements.filter(a => a.semaine !== derniere);
+      enregistrer(s); rendu();
+    };
+  }
+
+  rendu();
+</script>
+</body>
+</html>

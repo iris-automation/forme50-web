@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#2f6b4f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icone-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Programme · Forme 50+</title>
+<style>
+  :root { --bg:#f7f5f0; --card:#fff; --ink:#1f2420; --muted:#5d655f; --accent:#2f6b4f; --accent-soft:#e3efe8; --warn:#9a4a12; --warn-soft:#fbeee2; --line:#d9dcd6; --radius:14px; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:18px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:780px; margin:0 auto; padding:24px 18px 80px; }
+  h1 { font-size:1.8rem; line-height:1.2; margin:8px 0 4px; }
+  h2 { font-size:1.35rem; margin:0 0 12px; color:var(--accent); }
+  h3 { font-size:1.1rem; margin:18px 0 8px; }
+  .sub { color:var(--muted); margin:0 0 18px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:20px; margin-bottom:18px; }
+  .alert { background:var(--warn-soft); color:var(--warn); border-radius:10px; padding:12px 14px; margin:0 0 10px; }
+  .info { background:var(--accent-soft); color:var(--accent); border-radius:10px; padding:12px 14px; margin:0 0 10px; }
+  .chiffres { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:12px; }
+  .chiffre { background:var(--bg); border-radius:10px; padding:12px; }
+  .chiffre b { display:block; font-size:1.35rem; } .chiffre span { font-size:.85rem; color:var(--muted); }
+  ul { padding-left:1.2em; margin:6px 0; } li { margin:6px 0; }
+  table { width:100%; border-collapse:collapse; margin:6px 0 4px; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:.82rem; color:var(--muted); font-weight:600; }
+  td small { display:block; color:var(--muted); font-size:.88rem; line-height:1.45; }
+  .tag { display:inline-block; background:var(--accent-soft); color:var(--accent); border-radius:6px; padding:1px 8px; font-size:.85rem; font-weight:600; }
+  .planning { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 10px; }
+  .planning span { background:var(--accent); color:#fff; border-radius:8px; padding:4px 12px; font-weight:600; text-transform:capitalize; }
+  .carte { border-left:4px solid var(--accent); padding:4px 0 4px 14px; margin:14px 0; }
+  .carte b { display:block; margin-bottom:2px; }
+  .carte.dur { border-left-color:var(--warn); }
+  .muted { color:var(--muted); font-size:.9rem; }
+  .citation { font-style:italic; background:var(--bg); border-radius:10px; padding:12px 14px; }
+  .actions { display:flex; gap:10px; margin:0 0 18px; flex-wrap:wrap; }
+  .btn { font:inherit; font-weight:600; padding:11px 18px; border-radius:10px; border:1.5px solid var(--accent); background:#fff; color:var(--accent); text-decoration:none; cursor:pointer; display:inline-block; }
+  .btn.primary { background:var(--accent); color:#fff; }
+  @media print { .actions { display:none; } body { background:#fff; font-size:14px; } section { break-inside:avoid; border:none; padding:8px 0; } }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script src="donnees.js"></script>
+<script src="moteur.js"></script>
+<script src="stockage.js"></script>
+<script>
+  const esc = s => String(s ?? '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+  const liste = xs => xs.length ? `<ul>${xs.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '';
+  const fr = n => Number(n).toLocaleString('fr-FR');
+  const kg = n => String(n).replace('.', ',');
+  const de = p => /^[aeiouyàâéèêëîïôöùûüh]/i.test(p) ? "d'" : 'de ';
+  const app = document.getElementById('app');
+  const d = Forme50.stockage.lire('bilan');
+  const dureeFr = s => s >= 60 ? `${Math.floor(s / 60)} min${s % 60 ? ' ' + String(s % 60).padStart(2, '0') : ''}` : `${s} s`;
+
+  if (!d || !d.prenom || !d.objectifs) {
+    app.innerHTML = `<h1>Programme</h1><section><p>Aucun bilan complet trouvé sur cet appareil.</p><a class="btn primary" href="index.html">Faire le bilan de départ</a></section>`;
+  } else {
+    const p = Forme50.stockage.programme();
+    const c = p.chiffres, pr = p.prescription, nv = p.niveaux;
+
+    const exoLigne = e => {
+      const charge = e.charge ? `<span class="tag">départ ${kg(e.charge.depart)} kg${e.parMain ? ' par main' : ''}</span>` : `<span class="tag">${(e.materiel || []).includes('elastique') ? 'élastique' : (e.materiel || []).includes('barre') ? 'barre de traction' : 'poids du corps'}</span>`;
+      const reps = `${e.reps[0]}${e.reps[1] !== e.reps[0] ? ' à ' + e.reps[1] : ''} ${e.unite}${e.parCote ? ' par côté' : ''}`;
+      return `<tr><td><b>${esc(e.nom)}</b> ${charge}<small>${esc(e.consigne)}</small></td><td>${esc(reps)}</td><td>${dureeFr(e.repos)}</td></tr>`;
+    };
+    const seance = s => `<h3>${esc(s.nom)} <span class="muted">· environ ${s.duree} minutes</span></h3>
+      <table><thead><tr><th>Exercice</th><th>Par série</th><th>Repos</th></tr></thead><tbody>${s.exercices.map(exoLigne).join('')}</tbody></table>`;
+
+    app.innerHTML = `
+      <h1>Le programme ${de(p.prenom)}${esc(p.prenom)}</h1>
+      <p class="sub">Calculé à partir de votre bilan, de vos tests et de votre carnet : il se met à jour à chaque séance.</p>
+      <div class="actions">
+        <a class="btn primary" href="seance.html">Commencer une séance</a>
+        <a class="btn" href="suivi.html">Suivi de la semaine</a>
+        <button class="btn" onclick="print()">Imprimer</button>
+        <a class="btn" href="index.html">Modifier le bilan</a>
+      </div>
+
+      ${p.alertes.length ? `<section><h2>À lire avant de commencer</h2>${p.alertes.map(a => `<p class="${a.niveau === 'medical' ? 'alert' : 'info'}">${esc(a.texte)}</p>`).join('')}</section>` : ''}
+
+      ${nv.details.length ? `<section><h2>Ce que disent vos tests</h2>
+        <table><thead><tr><th>Test</th><th>Résultat</th><th>Ce que ça veut dire</th></tr></thead>
+        <tbody>${nv.details.map(t => `<tr><td>${esc(t.test)}</td><td><b>${esc(t.resultat)}</b></td><td>${esc(t.lecture)}</td></tr>`).join('')}</tbody></table>
+        <p class="muted">Chaque exercice démarre à votre niveau réel. On refait ces tests toutes les 4 semaines pour mesurer vos progrès.</p></section>` : ''}
+
+      <section>
+        <h2>Votre entraînement</h2>
+        <p>${esc(pr.texte)}</p>
+        <p><b>Vos jours${pr.debut < pr.ensuite ? ' (4 premières semaines)' : ''} :</b></p>
+        <div class="planning">${pr.joursDebut.map((j, i) => `<span>${esc(j)} · ${i % 2 === 0 ? 'A' : 'B'}</span>`).join('')}</div>
+        ${pr.debut < pr.ensuite ? `<p><b>Ensuite :</b></p><div class="planning">${pr.joursEnsuite.map((j, i) => `<span>${esc(j)} · ${i % 2 === 0 ? 'A' : 'B'}</span>`).join('')}</div>` : ''}
+        ${pr.notes.map(n => `<p class="info">${esc(n)}</p>`).join('')}
+        ${seance(p.seances.A)}
+        ${seance(p.seances.B)}
+        <h3>Comment ça marche</h3>
+        <ul>
+          <li><b>Première séance de chaque exercice chargé = calibration.</b> Partez de la charge indiquée et faites le maximum de répétitions propres, sans dépasser 15. Le carnet en déduit votre vraie charge de travail.</li>
+          <li><b>2 séries par exercice les deux premières semaines, puis 3.</b> Repos indiqué pour chaque exercice (le carnet le chronomètre), descente lente (2 secondes).</li>
+          <li><b>Progression automatique :</b> quand vous atteignez le haut de la fourchette sur toutes les séries, le carnet augmente la charge à la séance suivante. Pour les exercices sans charge, il passe à une version plus difficile : le programme ci-dessus se met à jour tout seul.</li>
+          <li><b>Les tests refaits toutes les 4 semaines</b> (page de suivi) recalent aussi les niveaux.</li>
+          <li>Échauffement de 5 minutes avant chaque séance. Toujours respirer pendant l'effort.</li>
+          <li>Règle de la douleur : une gêne légère (moins de 3 sur 10) qui n'augmente pas est acceptable ; une douleur qui monte, on passe à la version plus facile (bouton « Douloureux » dans le carnet).</li>
+        </ul>
+        <p><a class="btn primary" href="seance.html">Commencer une séance</a></p>
+      </section>
+
+      <section>
+        <h2>Endurance</h2>
+        <p><b>Au choix :</b> ${esc(p.endurance.activites.join(' ; '))}.</p>
+        <ul>${p.endurance.progression.map(x => `<li><b>Semaines ${esc(x.semaines)} :</b> ${esc(x.texte)}</li>`).join('')}</ul>
+        <p>${esc(p.endurance.intensite)}</p>
+        <p class="muted">${esc(p.endurance.pourquoi)}</p>
+      </section>
+
+      <section>
+        <h2>Les repères</h2>
+        <div class="chiffres">
+          ${p.alimentation.calories ? `<div class="chiffre"><b>${fr(c.cible)} kcal</b><span>par jour${c.mode === 'perte' ? ` (maintien estimé : ${fr(c.maintien)})` : ''}</span></div>` : ''}
+          ${c.proteines ? `<div class="chiffre"><b>${c.proteines} g</b><span>de protéines par jour (${c.proteinesParRepas} g par repas)</span></div>` : ''}
+          <div class="chiffre"><b>${fr(c.pasCible)} pas</b><span>par jour (départ estimé : ${fr(c.pasDepart)})</span></div>
+          ${c.mode === 'perte' ? `<div class="chiffre"><b>${kg(c.perteHebdo)} kg</b><span>de perte attendue par semaine</span></div>` : ''}
+        </div>
+        <p>${esc(c.explication)}</p>
+        ${c.objectif6mois ? `<p>Objectif réaliste à 6 mois : <b>entre ${kg(c.objectif6mois.min)} et ${kg(c.objectif6mois.max)} kg</b>.</p>` : ''}
+        ${c.etapes ? `<p class="info">${esc(c.etapes)}</p>` : ''}
+        <p class="muted">Estimation de départ (marge d'environ 10 %). Le suivi hebdomadaire la corrige : c'est ce qui garantit le résultat.</p>
+      </section>
+
+      <section>
+        <h2>Votre alimentation</h2>
+        ${p.alimentation.priorites.map(x => `<div class="carte"><b>${esc(x.titre)}</b>${esc(x.texte)}</div>`).join('')}
+        ${p.alimentation.remplacements.length ? `<h3>Un changement toutes les deux semaines</h3><ul>${p.alimentation.remplacements.map(r => `<li><b>Semaines ${esc(r.semaines)} :</b> ${esc(r.texte)}</li>`).join('')}</ul>` : ''}
+        <h3>Où trouver ses protéines</h3>${liste(p.alimentation.sources)}
+        <h3>Les repères de base</h3>${liste(p.alimentation.repere)}
+      </section>
+
+      ${p.alcool ? `<section><h2>Alcool</h2>
+        <p>${esc(p.alcool.constat)}</p><p><b>${esc(p.alcool.objectif)}</b></p>
+        <h3>Selon ce que vous buvez</h3>${p.alcool.parBoisson.map(t => `<div class="carte">${esc(t)}</div>`).join('')}
+        ${p.alcool.etapes.length ? `<h3>Dans quel ordre</h3><p class="muted">On commence par le moment le plus facile à changer, pour réussir vite. Le plus difficile vient en dernier.</p>
+          ${p.alcool.etapes.map(e => `<div class="carte ${e.difficile ? 'dur' : ''}"><b>${e.semaines ? `Semaines ${esc(e.semaines)} · ` : ''}${esc(e.moment.charAt(0).toUpperCase() + e.moment.slice(1))}${e.difficile ? ' (le plus difficile)' : ''}</b>${esc(e.texte)}</div>`).join('')}` : ''}
+        <p class="muted">${esc(p.alcool.pourquoi)}</p></section>` : ''}
+
+      <section>
+        <h2>Votre stratégie pour tenir</h2>
+        ${p.motivation.pourquoi ? `<p class="citation">« ${esc(p.motivation.pourquoi)} »</p>` : ''}
+        <h3>Vos plans « si… alors »</h3>
+        <p class="muted">Décider à l'avance quoi faire face à l'obstacle aide vraiment à tenir. (§ 29)</p>
+        ${liste(p.motivation.plans)}
+        ${p.motivation.leviers.map(l => `<div class="carte"><b>${esc(l.titre)}</b>${esc(l.texte)}</div>`).join('')}
+      </section>
+
+      ${p.sommeilStress.length ? `<section><h2>Sommeil et stress</h2>${liste(p.sommeilStress)}</section>` : ''}
+
+      <section>
+        <h2>Le suivi</h2>
+        <ul>
+          <li><b>À chaque séance :</b> notez vos séries dans le carnet. Il calcule la charge de la séance suivante.</li>
+          <li><b>Chaque semaine :</b> poids moyen, tour de taille, pas. Le suivi ajuste les objectifs si besoin.</li>
+          <li><b>Toutes les 4 semaines :</b> on refait les tests physiques du bilan.</li>
+        </ul>
+        <div class="actions"><a class="btn primary" href="seance.html">Carnet de séance</a><a class="btn" href="suivi.html">Suivi de la semaine</a></div>
+      </section>
+
+      <p class="muted">Ce programme s'appuie sur les recommandations officielles et la recherche scientifique. Il ne remplace pas l'avis d'un médecin.</p>`;
+  }
+</script>
+</body>
+</html>

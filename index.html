@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#2f6b4f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icone-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Bilan de départ · Forme 50+</title>
+<style>
+  :root { --bg:#f7f5f0; --card:#fff; --ink:#1f2420; --muted:#5d655f; --accent:#2f6b4f; --accent-soft:#e3efe8; --warn:#9a4a12; --warn-soft:#fbeee2; --line:#d9dcd6; --radius:14px; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:19px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:680px; margin:0 auto; padding:24px 18px 80px; }
+  h1 { font-size:1.7rem; line-height:1.25; margin:8px 0 6px; }
+  .intro { color:var(--muted); margin:0 0 20px; }
+  .progress { height:8px; background:var(--line); border-radius:99px; overflow:hidden; margin:14px 0 6px; }
+  .progress > div { height:100%; background:var(--accent); width:0; transition:width .3s; }
+  .step-label { font-size:.9rem; color:var(--muted); margin-bottom:18px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:22px 20px; }
+  h2 { font-size:1.3rem; margin:0 0 4px; }
+  .hint { color:var(--muted); font-size:.95rem; margin:0 0 14px; }
+  .field { margin-bottom:22px; }
+  .field > .q { display:block; font-weight:600; margin-bottom:4px; }
+  .field > .aide { display:block; color:var(--muted); font-size:.9rem; margin-bottom:8px; }
+  .multi { font-weight:400; color:var(--accent); font-size:.85rem; }
+  input[type=text], input[type=number], textarea { width:100%; font:inherit; padding:12px 14px; border:1.5px solid var(--line); border-radius:10px; background:#fff; color:var(--ink); }
+  input:focus, textarea:focus { outline:3px solid var(--accent-soft); border-color:var(--accent); }
+  textarea { min-height:90px; resize:vertical; }
+  .choices { display:grid; gap:8px; }
+  .choices.compact { grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); }
+  .choices label { display:flex; align-items:center; gap:12px; padding:12px 14px; border:1.5px solid var(--line); border-radius:10px; cursor:pointer; }
+  .choices label:has(input:checked) { border-color:var(--accent); background:var(--accent-soft); }
+  .choices input { width:22px; height:22px; accent-color:var(--accent); flex:none; }
+  .test { background:var(--bg); border-radius:12px; padding:16px; }
+  .test ol { margin:6px 0 12px; padding-left:1.2em; } .test li { margin:4px 0; }
+  .test .impossible { display:flex; gap:10px; align-items:center; margin-top:10px; font-size:.95rem; }
+  .test .impossible input { width:20px; height:20px; accent-color:var(--accent); }
+  .nav { display:flex; justify-content:space-between; gap:12px; margin-top:18px; }
+  button, .btn { font:inherit; font-weight:600; padding:13px 22px; border-radius:10px; cursor:pointer; border:1.5px solid var(--accent); text-decoration:none; display:inline-block; }
+  .primary { background:var(--accent); color:#fff; } .secondary { background:#fff; color:var(--accent); }
+  .alert { background:var(--warn-soft); color:var(--warn); border-radius:10px; padding:14px 16px; margin:0 0 18px; }
+  .ok { background:var(--accent-soft); color:var(--accent); border-radius:10px; padding:14px 16px; margin:0 0 18px; }
+  .error { color:var(--warn); font-size:.95rem; margin-top:8px; display:none; }
+  dl { margin:0 0 16px; } dt { font-weight:600; margin-top:12px; } dd { margin:2px 0 0; color:var(--muted); }
+  .small { font-size:.85rem; color:var(--muted); }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:480px) { .row { grid-template-columns:1fr; } body { font-size:18px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Bilan de départ</h1>
+  <p class="intro">Environ 15 minutes, dont 10 de petits tests physiques. Plus les réponses sont précises, plus le programme sera fait pour vous. Si vous remplissez pour un proche, répondez à sa place.</p>
+  <div id="accueil">
+    <p class="ok" id="ecranAccueil" hidden><b>Sur téléphone, avant de commencer :</b> ajoutez l'appli à l'écran d'accueil (iPhone : bouton Partager, puis « Sur l'écran d'accueil » ; Android : menu ⋮, puis « Ajouter à l'écran d'accueil »), puis ouvrez-la depuis la nouvelle icône. Elle s'ouvre comme une vraie appli et vos données y sont mieux protégées.</p>
+    <p class="small">Déjà commencé sur un autre appareil ? <label style="text-decoration:underline;cursor:pointer;color:var(--accent)">Restaurer une sauvegarde<input type="file" accept="application/json,.json" id="restaurerFichier" hidden></label></p>
+  </div>
+  <div class="progress"><div id="bar"></div></div>
+  <div class="step-label" id="stepLabel"></div>
+  <form id="form" novalidate><div id="etapes"></div>
+    <p class="error" id="error"></p>
+    <div class="nav"><button type="button" class="secondary" id="prev">Retour</button><button type="button" class="primary" id="next">Continuer</button></div>
+  </form>
+</main>
+<script src="stockage.js"></script>
+<script>
+// ---------- Définition du bilan ----------
+// type : texte, nombre, un (choix unique), plusieurs (choix multiples, `aucun` = option exclusive), long (texte libre), test
+// requis : true par défaut pour un/plusieurs/nombre ; si : condition d'affichage (fonction des réponses)
+const total = d => ['alcoolVin', 'alcoolBiere', 'alcoolSpiritueux', 'alcoolApero'].reduce((s, k) => s + (Number(d[k]) || 0), 0);
+const ETAPES = [
+  { titre: 'Profil', intro: '', champs: [
+    { nom: 'prenom', type: 'texte', q: 'Prénom' },
+    { ligne: [{ nom: 'age', type: 'nombre', q: 'Âge', min: 35, max: 90 }, { nom: 'sexe', type: 'un', q: 'Sexe', options: ['femme', 'homme'], libelles: ['Femme', 'Homme'] }] },
+    { ligne: [{ nom: 'taille', type: 'nombre', q: 'Taille (cm)', min: 130, max: 220 }, { nom: 'poids', type: 'nombre', q: 'Poids (kg)', min: 35, max: 250, step: 0.1 }] },
+    { nom: 'tourTaille', type: 'nombre', q: 'Tour de taille (cm)', aide: 'Avec un mètre de couturière, au niveau du nombril, sans rentrer le ventre.', min: 50, max: 200, step: 0.5 },
+    { nom: 'objectifs', type: 'plusieurs', q: 'Vos objectifs', options: ['perdre du poids', 'garder ou reprendre du muscle', "plus d'énergie au quotidien", 'moins de douleurs', 'rester autonome en vieillissant'],
+      libelles: ['Perdre du poids', 'Garder ou reprendre du muscle', "Avoir plus d'énergie au quotidien", 'Avoir moins de douleurs (dos, articulations)', 'Rester autonome en vieillissant'] },
+    { nom: 'poidsVise', type: 'nombre', q: 'Poids visé (kg)', requis: false, si: d => (d.objectifs || []).includes('perdre du poids'), min: 35, max: 250, step: 0.1 },
+  ]},
+  { titre: 'Santé', intro: "Ces questions servent à adapter le programme et à repérer les cas où un avis médical est nécessaire avant de commencer.", champs: [
+    { nom: 'sante', type: 'plusieurs', q: 'Cochez ce qui s\'applique', aucun: 'aucun', options: [
+      ['coeur', 'Problème cardiaque connu, ou douleur dans la poitrine à l\'effort', 1], ['malaise', 'Vertiges, malaises ou pertes de connaissance ces 12 derniers mois', 1],
+      ['tension', 'Tension élevée pas encore stabilisée par un traitement', 1], ['diabète sans insuline ni sulfamides', 'Diabète, sans insuline ni sulfamides'],
+      ['diabète avec insuline ou sulfamides', 'Diabète traité par insuline ou par sulfamides (comprimés qui font baisser le sucre)'], ['maladie rénale', 'Maladie des reins connue'],
+      ['operation', 'Opération ou blessure importante ces 6 derniers mois', 1], ['osteoporose', 'Ostéoporose connue'],
+      ['médicament qui fait grossir', 'Traitement au long cours qui peut faire grossir (cortisone, certains antidépresseurs ou neuroleptiques…)'],
+      ["traitement contre l'obésité", "Traitement contre l'obésité (par exemple des injections hebdomadaires)"],
+      ['troubles alimentaires', 'Antécédents de troubles du comportement alimentaire (anorexie, boulimie, crises de compulsion)', 1],
+      ['medecin', 'Un médecin a déjà déconseillé une activité physique', 1], ['aucun', 'Rien de tout cela']] },
+    { nom: 'douleurs', type: 'plusieurs', q: 'Douleurs ou gênes articulaires', aucun: 'aucune', compact: true, options: [['dos', 'Dos'], ['genoux', 'Genoux'], ['hanches', 'Hanches'], ['épaules', 'Épaules'], ['aucune', 'Aucune']] },
+    { nom: 'traitements', type: 'long', q: 'Traitements en cours ou précisions utiles', requis: false, aide: 'Ex. : prothèse de hanche en 2019, traitement pour la thyroïde…' },
+  ]},
+  { titre: 'Tests physiques', intro: "Quatre petits tests pour mesurer votre niveau réel, au lieu de le deviner. Faites-les reposé·e, en tenue souple, à côté d'un mur ou d'un plan de travail. Arrêtez immédiatement en cas de douleur, d'essoufflement important ou de vertige.", stop: d => (d.sante || []).some(v => ['coeur', 'malaise', 'medecin', 'operation'].includes(v)), champs: [
+    { nom: 'testChaise', type: 'test', titre: '1. Assis-debout en 30 secondes (jambes)', etapes: ["Chaise sans accoudoirs, dossier contre un mur.", "Assis·e au milieu de la chaise, pieds à plat, bras croisés sur la poitrine.", "Au top, levez-vous complètement puis rasseyez-vous, le plus de fois possible en 30 secondes, sans les mains."], q: 'Nombre de levers complets', unite: 'levers', min: 0, max: 50, impossible: 'testChaiseImpossible', libelleImpossible: "Je n'arrive pas à me lever sans les mains" },
+    { nom: 'testEquilibre', type: 'test', titre: '2. Équilibre sur un pied (équilibre)', etapes: ["Pieds nus, à côté d'un mur, bras croisés sur la poitrine.", "Levez un pied (celui que vous voulez) et tenez le plus longtemps possible, 45 secondes maximum.", "Le test s'arrête si les bras se décroisent ou si le pied touche le sol ou l'autre jambe. Faites 3 essais et notez le meilleur."], q: 'Meilleur temps (secondes)', unite: 's', min: 0, max: 45, impossible: 'testEquilibreImpossible', libelleImpossible: "Je ne tiens pas sans me rattraper" },
+    { nom: 'testPompesVariante', type: 'un', q: '3. Pompes (haut du corps) : la variante la plus difficile que vous réussissez au moins 5 fois proprement', aide: "Essayez dans l'ordre : contre un mur, sur une table solide, sur les genoux au sol, puis au sol sur les pieds. Corps bien droit.",
+      options: ['mur', 'table', 'genoux', 'sol', 'aucune'], libelles: ['Contre un mur', 'Sur une table solide', 'Sur les genoux, au sol', 'Au sol, sur les pieds', "Aucune, même contre un mur"] },
+    { nom: 'testPompes', type: 'nombre', q: 'Nombre maximum de pompes de cette variante, sans pause', min: 0, max: 100, si: d => d.testPompesVariante && d.testPompesVariante !== 'aucune' },
+    { nom: 'testGainageVariante', type: 'un', q: '4. Gainage (sangle abdominale) : sur les avant-bras, corps droit', aide: "Essayez sur les pieds ; si c'est trop dur, sur les genoux. Arrêtez quand les fesses montent ou que le dos se creuse.",
+      options: ['pieds', 'genoux', 'impossible'], libelles: ['Sur les pieds', 'Sur les genoux', "Je n'arrive pas à tenir"] },
+    { nom: 'testGainage', type: 'nombre', q: 'Temps tenu (secondes)', min: 0, max: 600, si: d => ['pieds', 'genoux'].includes(d.testGainageVariante) },
+    { nom: 'testMarche', type: 'test', titre: 'Bonus : marche sur place 2 minutes (endurance)', etapes: ["Debout, marchez sur place en montant les genoux à mi-hauteur entre la rotule et la hanche.", "Comptez combien de fois le genou droit monte en 2 minutes. Vous pouvez ralentir, ou vous tenir au mur."], q: 'Nombre de levers du genou droit', unite: 'levers', min: 0, max: 200, requis: false, impossible: 'testMarcheNonFait', libelleImpossible: "Je ne fais pas ce test" },
+  ]},
+  { titre: 'Votre quotidien', intro: "C'est le programme qui décide du nombre et de la durée des séances. Ici, on veut seulement connaître vos contraintes réelles.", champs: [
+    { nom: 'metier', type: 'un', q: 'Votre journée type', options: ['assis', 'debout', 'physique', 'retraite'], libelles: ['Plutôt assis·e (bureau, voiture)', 'Plutôt debout ou en mouvement', 'Travail physique', 'Retraité·e ou sans emploi'] },
+    { nom: 'activite', type: 'un', q: 'Activité physique aujourd\'hui', options: ['sédentaire', 'marche régulière', 'sport occasionnel', 'sport régulier'], libelles: ['Presque pas', 'Je marche régulièrement', 'Un peu de sport de temps en temps', 'Du sport au moins une fois par semaine'] },
+    { nom: 'muscu', type: 'un', q: 'Déjà fait de la musculation ?', options: ['jamais', 'il y a longtemps', 'récemment'], libelles: ['Jamais', 'Oui, il y a longtemps', 'Oui, récemment'] },
+    { nom: 'sports', type: 'plusieurs', q: 'Ce que vous aimez (ou aimeriez) faire pour bouger', aucun: 'aucun', compact: true, options: [['marche', 'Marche'], ['vélo', 'Vélo'], ['natation', 'Natation'], ['randonnée', 'Randonnée'], ['danse', 'Danse'], ['course', 'Course'], ['jardinage', 'Jardinage'], ['aucun', 'Rien de tout ça']] },
+    { nom: 'salle', type: 'un', q: 'Une salle de sport ?', options: ['oui', 'possible', 'non'], libelles: ['Oui, j\'y ai accès', 'Possible si besoin', 'Non'] },
+    { nom: 'materiel', type: 'plusieurs', q: 'Matériel à la maison', aucun: 'rien', options: [['halteres', 'Haltères (de préférence réglables)'], ['kettlebell', 'Kettlebell'], ['elastique', 'Élastiques de musculation'], ['banc', 'Banc de musculation'], ['barre', 'Barre de traction'], ['rien', 'Rien de tout ça']] },
+    { nom: 'jours', type: 'plusieurs', q: 'Les jours où vous pourriez bouger', aide: 'Cochez tous les jours possibles, même si vous ne les utiliserez pas tous.', compact: true, options: [['lundi', 'Lundi'], ['mardi', 'Mardi'], ['mercredi', 'Mercredi'], ['jeudi', 'Jeudi'], ['vendredi', 'Vendredi'], ['samedi', 'Samedi'], ['dimanche', 'Dimanche']] },
+    { nom: 'moment', type: 'un', q: 'Le moment de la journée le plus facile', options: ['matin', 'midi', "fin d'après-midi", 'soir', 'variable'], libelles: ['Le matin', 'À midi', "En fin d'après-midi", 'Le soir', 'Ça varie'] },
+  ]},
+  { titre: 'Ce qui freine', intro: "C'est souvent là que tout se joue. Soyez honnête : le programme s'en sert pour construire votre stratégie.", champs: [
+    { nom: 'freins', type: 'plusieurs', q: "Qu'est-ce qui retient de faire du sport ?", aucun: 'rien de particulier', options: [['manque de temps', 'Le manque de temps'], ['fatigue', 'La fatigue'], ['ne sait pas quoi faire', 'Je ne sais pas quoi faire ni comment'], ['regard des autres', 'Le regard des autres, la gêne'], ['douleurs, peur de se blesser', 'Les douleurs, la peur de me blesser'], ['motivation qui retombe', 'La motivation qui retombe vite'], ['coût', 'Le coût'], ['rien de particulier', 'Rien de particulier']] },
+    { nom: 'arret', type: 'plusieurs', q: "La dernière fois que vous avez arrêté le sport, c'était à cause de…", aucun: 'jamais commencé', options: [['blessure ou douleur', 'Une blessure ou une douleur'], ['ennui', "L'ennui, la routine"], ['pas de résultats', 'Je ne voyais pas de résultats'], ['emploi du temps', "L'emploi du temps"], ['seul·e', "J'étais seul·e, personne pour me motiver"], ['motivation', 'La motivation est retombée'], ['jamais commencé', "Je n'ai jamais vraiment commencé"]] },
+    { nom: 'soutien', type: 'un', q: 'Qui peut vous soutenir ?', options: ['seul·e', 'conjoint·e', 'enfant', 'ami·e'], libelles: ['Personne en particulier', 'Mon conjoint ou ma conjointe', 'Un de mes enfants', 'Un ami ou une amie'] },
+    { nom: 'compagnie', type: 'un', q: 'Vous préférez bouger…', options: ['seul·e', 'accompagné·e', 'peu importe'], libelles: ['Seul·e', 'Accompagné·e', 'Peu importe'] },
+  ]},
+  { titre: 'Énergie et sommeil', intro: '', champs: [
+    { nom: 'energie', type: 'un', q: "Niveau d'énergie dans la journée", options: ['souvent épuisé·e', 'coups de fatigue fréquents', 'correct', "plein d'énergie"], libelles: ['Souvent épuisé·e', 'Des coups de fatigue fréquents', 'Correct', "Plein d'énergie"] },
+    { nom: 'stress', type: 'un', q: 'Niveau de stress en ce moment', options: ['faible', 'moyen', 'élevé', 'très élevé'], libelles: ['Faible', 'Moyen', 'Élevé', 'Très élevé'] },
+    { nom: 'sommeil', type: 'un', q: 'Sommeil', options: ['bon', 'réveils fréquents', 'trop court', 'mauvais'], libelles: ['Je dors bien', 'Je me réveille souvent la nuit', 'Je dors trop peu (moins de 6 h)', 'Je dors mal en général'] },
+  ]},
+  { titre: 'Alimentation', intro: 'Des questions concrètes sur vos vraies habitudes, pas un régime.', champs: [
+    { nom: 'petitDej', type: 'un', q: 'Le petit-déjeuner', options: ['complet', 'café seul', 'rien'], libelles: ['Un vrai petit-déjeuner', 'Juste un café ou un thé', 'Rien'] },
+    { nom: 'dejeuner', type: 'un', q: 'Le déjeuner, en semaine', options: ['maison', 'cantine', 'restaurant', 'sandwich ou boulangerie', 'variable'], libelles: ['À la maison', 'À la cantine', 'Au restaurant', 'Sandwich ou boulangerie', 'Ça varie'] },
+    { nom: 'cuisine', type: 'un', q: 'Le temps pour cuisiner', options: ['peu', 'moyen', 'aime cuisiner'], libelles: ['Très peu (moins de 15 minutes)', 'Un peu', "J'aime cuisiner"] },
+    { nom: 'proteines', type: 'un', q: 'Viande, poisson, œufs, laitages ou légumineuses', options: ['à chaque repas', 'une fois par jour', 'rarement'], libelles: ['À chaque repas', 'Une fois par jour', 'Rarement'] },
+    { nom: 'legumes', type: 'un', q: 'Les légumes', options: ['à chaque repas', 'une fois par jour', 'rarement'], libelles: ['À chaque repas', 'Une fois par jour', 'Rarement'] },
+    { nom: 'grignotageMoments', type: 'plusieurs', q: 'Quand grignotez-vous ?', aucun: 'rarement', options: [['matin', 'Le matin'], ['après-midi', "L'après-midi"], ['soir devant la télé', 'Le soir, devant la télé'], ['la nuit', 'La nuit'], ['rarement', 'Rarement']] },
+    { nom: 'grignotageQuoi', type: 'plusieurs', q: 'Et quoi ?', si: d => (d.grignotageMoments || []).some(m => m !== 'rarement'), options: [['sucré', 'Du sucré (biscuits, chocolat, bonbons)'], ['salé', 'Du salé (chips, biscuits apéro)'], ['fromage ou charcuterie', 'Fromage ou charcuterie'], ['fruits', 'Des fruits']] },
+    { nom: 'aliments', type: 'plusieurs', q: 'Ce qui revient au moins une fois par semaine', aucun: 'rien de tout cela', options: [['fromage', 'Fromage'], ['charcuterie', 'Charcuterie'], ['fast-food', 'Fast-food'], ['pizza', 'Pizza'], ['plats préparés, produits industriels', 'Plats préparés, produits industriels'], ['gâteaux, biscuits, sucreries', 'Gâteaux, biscuits, sucreries'], ['sodas, jus', 'Sodas ou jus'], ['pain en grande quantité', 'Beaucoup de pain'], ['rien de tout cela', 'Rien de tout cela']] },
+    { nom: 'contraintes', type: 'texte', q: 'Contraintes alimentaires', requis: false, aide: 'Ex. : végétarien, sans lactose, allergie aux noix…' },
+  ]},
+  { titre: 'Alcool', intro: 'Combien de verres, en moyenne, sur une semaine normale ? Mettez 0 si vous ne buvez pas ce type de boisson.', champs: [
+    { ligne: [{ nom: 'alcoolVin', type: 'nombre', q: 'Verres de vin', min: 0, max: 100, defaut: 0 }, { nom: 'alcoolBiere', type: 'nombre', q: 'Bières (25 cl)', min: 0, max: 100, defaut: 0 }] },
+    { ligne: [{ nom: 'alcoolSpiritueux', type: 'nombre', q: 'Spiritueux (whisky, pastis, rhum…)', min: 0, max: 100, defaut: 0 }, { nom: 'alcoolApero', type: 'nombre', q: 'Apéritifs sucrés, cocktails', min: 0, max: 100, defaut: 0 }] },
+    { nom: 'alcoolMoment', type: 'plusieurs', q: 'À quels moments ?', si: d => total(d) > 0, options: [['apéritif', "À l'apéritif"], ['pendant les repas', 'Pendant les repas'], ['le week-end, en soirée', 'Le week-end, en soirée'], ['pour décompresser, seul·e', 'Pour décompresser, seul·e']] },
+    { nom: 'alcoolDifficile', type: 'un', q: 'Le moment qui serait le plus difficile à changer', si: d => total(d) > 0 && (d.alcoolMoment || []).length > 1, options: ['apéritif', 'pendant les repas', 'le week-end, en soirée', 'pour décompresser, seul·e'], libelles: ["L'apéritif", 'Pendant les repas', 'Le week-end, en soirée', 'Pour décompresser'] },
+  ]},
+  { titre: 'Motivation', intro: '', champs: [
+    { nom: 'pourquoi', type: 'long', q: 'Pourquoi maintenant ?', aide: 'Ex. : être en forme pour les petits-enfants, ne plus être essoufflé·e dans les escaliers…' },
+  ]},
+];
+
+// ---------- Rendu ----------
+const STORE = 'forme50-bilan';
+const etapesEl = document.getElementById('etapes');
+const tousChamps = () => ETAPES.flatMap(e => e.champs.flatMap(c => c.ligne || [c]));
+const esc = s => String(s ?? '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+
+// Options : soit [valeur, libellé, médical], soit une valeur simple avec `libelles` à côté
+const opts = c => c.options.map((o, i) => Array.isArray(o) ? o : [o, c.libelles ? c.libelles[i] : o]);
+
+function champHtml(c) {
+  const q = `<span class="q">${esc(c.q)}${c.type === 'plusieurs' ? ' <span class="multi">(plusieurs choix possibles)</span>' : ''}</span>${c.aide ? `<span class="aide">${esc(c.aide)}</span>` : ''}`;
+  if (c.type === 'texte') return `<div class="field" data-champ="${c.nom}">${q}<input type="text" name="${c.nom}"></div>`;
+  if (c.type === 'nombre') return `<div class="field" data-champ="${c.nom}">${q}<input type="number" inputmode="decimal" name="${c.nom}" min="${c.min ?? ''}" max="${c.max ?? ''}" step="${c.step ?? 1}" ${c.defaut != null ? `value="${c.defaut}"` : ''}></div>`;
+  if (c.type === 'long') return `<div class="field" data-champ="${c.nom}">${q}<textarea name="${c.nom}"></textarea></div>`;
+  if (c.type === 'un') return `<div class="field" data-champ="${c.nom}">${q}<div class="choices">${c.options.map((o, i) => `<label><input type="radio" name="${c.nom}" value="${esc(o)}"> ${esc(c.libelles ? c.libelles[i] : o)}</label>`).join('')}</div></div>`;
+  if (c.type === 'plusieurs') return `<div class="field" data-champ="${c.nom}">${q}<div class="choices ${c.compact ? 'compact' : ''}">${opts(c).map(([v, l, med]) => `<label><input type="checkbox" name="${c.nom}" value="${esc(v)}" ${v === c.aucun ? 'data-aucun' : ''} ${med ? 'data-medical' : ''}> ${esc(l)}</label>`).join('')}</div></div>`;
+  if (c.type === 'test') return `<div class="field test" data-champ="${c.nom}"><b>${esc(c.titre)}</b><ol>${c.etapes.map(e => `<li>${esc(e)}</li>`).join('')}</ol><span class="q">${esc(c.q)}</span><input type="number" inputmode="numeric" name="${c.nom}" min="${c.min}" max="${c.max}"><label class="impossible"><input type="checkbox" name="${c.impossible}" value="1" data-impossible="${c.nom}"> ${esc(c.libelleImpossible)}</label></div>`;
+}
+
+etapesEl.innerHTML = ETAPES.map((e, i) => `<section data-etape="${i}" hidden><h2>${esc(e.titre)}</h2>${e.intro ? `<p class="hint">${esc(e.intro)}</p>` : ''}
+  ${e.stop ? `<p class="alert" data-stop="${i}" hidden>Avec vos réponses de santé, faites ces tests seulement après l'accord de votre médecin. Vous pouvez cocher « je n'y arrive pas » ou passer : le programme partira d'un niveau prudent.</p>` : ''}
+  ${e.champs.map(c => c.ligne ? `<div class="row">${c.ligne.map(champHtml).join('')}</div>` : champHtml(c)).join('')}</section>`).join('')
+  + `<section data-etape="${ETAPES.length}" hidden><h2>Récapitulatif</h2><div id="recapAlert"></div><dl id="recap"></dl>
+     <p><a class="btn primary" href="programme.html">Voir mon programme</a></p><p class="small">Les réponses restent sur cet appareil : rien n'est envoyé.</p></section>`;
+
+const form = document.getElementById('form');
+const sections = [...etapesEl.querySelectorAll('section')];
+let courant = 0;
+
+function lire() {
+  const d = {};
+  for (const el of form.elements) {
+    if (!el.name) continue;
+    if (el.type === 'checkbox' && el.dataset.impossible !== undefined) { d[el.name] = el.checked; continue; }
+    if (el.type === 'checkbox') { (d[el.name] ??= []); if (el.checked) d[el.name].push(el.value); }
+    else if (el.type === 'radio') { if (el.checked) d[el.name] = el.value; else d[el.name] ??= ''; }
+    else d[el.name] = el.value.trim();
+  }
+  return d;
+}
+function sauver() { localStorage.setItem(STORE, JSON.stringify(lire())); }
+function restaurer() {
+  const s = JSON.parse(localStorage.getItem(STORE) || '{}');
+  for (const [nom, val] of Object.entries(s)) for (const el of form.querySelectorAll(`[name="${nom}"]`)) {
+    if (el.type === 'radio') el.checked = el.value === val;
+    else if (el.type === 'checkbox') el.checked = el.dataset.impossible !== undefined ? !!val : [].concat(val).includes(el.value);
+    else el.value = val;
+  }
+}
+
+function majAffichage() {
+  const d = lire();
+  for (const c of tousChamps()) if (c.si) { const el = form.querySelector(`[data-champ="${c.nom}"]`); el.hidden = !c.si(d); }
+  ETAPES.forEach((e, i) => { if (e.stop) form.querySelector(`[data-stop="${i}"]`).hidden = !e.stop(d); });
+  // Un test coché « impossible » vide et désactive sa saisie
+  for (const cb of form.querySelectorAll('[data-impossible]')) { const inp = form.elements[cb.dataset.impossible]; inp.disabled = cb.checked; if (cb.checked) inp.value = ''; }
+}
+
+form.addEventListener('change', e => {
+  const el = e.target;
+  if (el.type === 'checkbox' && el.checked && el.dataset.impossible === undefined) {
+    for (const autre of form.querySelectorAll(`[name="${el.name}"]`)) if (autre !== el && (el.hasAttribute('data-aucun') || autre.hasAttribute('data-aucun'))) autre.checked = false;
+  }
+  majAffichage(); sauver();
+});
+form.addEventListener('input', () => { majAffichage(); sauver(); });
+
+function valide(i) {
+  const d = lire();
+  for (const c of ETAPES[i].champs.flatMap(c => c.ligne || [c])) {
+    if (c.si && !c.si(d)) continue;
+    if (c.requis === false) continue;
+    if (c.type === 'test') { if (d[c.impossible]) continue; if (d[c.nom] === '' ) return `Notez le résultat du test « ${c.titre} », ou cochez la case en dessous.`; continue; }
+    if (c.type === 'plusieurs' && !(d[c.nom] || []).length) return `Il manque une réponse : « ${c.q} ».`;
+    if (['un', 'texte', 'nombre', 'long'].includes(c.type) && (d[c.nom] === '' || d[c.nom] == null)) return `Il manque une réponse : « ${c.q} ».`;
+  }
+  return null;
+}
+
+function recap() {
+  const d = lire();
+  const lignes = [];
+  for (const e of ETAPES) for (const c of e.champs.flatMap(c => c.ligne || [c])) {
+    if (c.si && !c.si(d)) continue;
+    let v = d[c.nom];
+    if (c.type === 'test' && d[c.impossible]) v = c.libelleImpossible;
+    if (Array.isArray(v)) v = v.map(x => (opts(c).find(o => o[0] === x) || [x, x])[1]).join(', ');
+    else if (c.type === 'un' && c.libelles) v = c.libelles[c.options.indexOf(v)] ?? v;
+    if (v === '' || v == null) continue;
+    lignes.push(`<dt>${esc(c.titre || c.q)}</dt><dd>${esc(v)}</dd>`);
+  }
+  document.getElementById('recap').innerHTML = lignes.join('');
+  const med = [...form.querySelectorAll('[data-medical]')].some(el => el.checked);
+  document.getElementById('recapAlert').innerHTML = med ? '<p class="alert">Avis médical nécessaire avant de commencer.</p>' : '<p class="ok">Aucun signal d\'alerte santé dans les réponses.</p>';
+}
+
+function montrer(i) {
+  courant = i;
+  sections.forEach((s, k) => s.hidden = k !== i);
+  const n = sections.length;
+  document.getElementById('bar').style.width = `${(i / (n - 1)) * 100}%`;
+  document.getElementById('stepLabel').textContent = `Étape ${i + 1} sur ${n} · ${i < ETAPES.length ? ETAPES[i].titre : 'Récapitulatif'}`;
+  document.getElementById('prev').style.visibility = i === 0 ? 'hidden' : 'visible';
+  document.getElementById('next').style.display = i === n - 1 ? 'none' : '';
+  document.getElementById('error').style.display = 'none';
+  if (i === n - 1) recap();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+document.getElementById('next').onclick = () => {
+  const err = valide(courant);
+  if (err) { const el = document.getElementById('error'); el.textContent = err; el.style.display = 'block'; return; }
+  montrer(courant + 1);
+};
+document.getElementById('prev').onclick = () => montrer(courant - 1);
+
+// Écran d'accueil : conseil affiché seulement dans le navigateur, sur téléphone
+const autonome = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone;
+const dejaCommence = !!(Forme50.stockage.lire('bilan') || {}).prenom; // l'écran d'accueil a son propre stockage sur iPhone : ne pas pousser à changer en cours de route
+document.getElementById('ecranAccueil').hidden = autonome || dejaCommence || !/iPhone|iPad|Android/i.test(navigator.userAgent);
+document.getElementById('restaurerFichier').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  Forme50.stockage.restaurer(f).then(() => { location.href = 'programme.html'; }).catch(err => alert(err.message));
+};
+
+restaurer(); majAffichage(); montrer(0);
+</script>
+</body>
+</html>

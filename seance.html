@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#2f6b4f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icone-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Carnet de séance · Forme 50+</title>
+<style>
+  :root { --bg:#f7f5f0; --card:#fff; --ink:#1f2420; --muted:#5d655f; --accent:#2f6b4f; --accent-soft:#e3efe8; --warn:#9a4a12; --warn-soft:#fbeee2; --line:#d9dcd6; --radius:14px; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:18px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:24px 18px 120px; }
+  h1 { font-size:1.7rem; margin:8px 0 4px; }
+  h2 { font-size:1.15rem; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 12px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:18px; margin-bottom:14px; }
+  .consigne { color:var(--muted); font-size:.92rem; margin:0 0 10px; }
+  .cible { background:var(--accent-soft); color:var(--accent); border-radius:10px; padding:10px 12px; margin:0 0 12px; font-size:.95rem; }
+  .cible.calib { background:var(--warn-soft); color:var(--warn); }
+  .serie { display:grid; grid-template-columns:90px 1fr 1fr; gap:8px; align-items:center; margin-bottom:8px; }
+  .serie.pdc { grid-template-columns:90px 1fr; }
+  .serie span { font-size:.9rem; color:var(--muted); }
+  .serie label { display:flex; align-items:center; gap:6px; font-size:.85rem; color:var(--muted); }
+  input[type=number] { width:100%; font:inherit; padding:10px; border:1.5px solid var(--line); border-radius:10px; text-align:center; }
+  input:focus { outline:3px solid var(--accent-soft); border-color:var(--accent); }
+  .resultat { font-size:.92rem; margin-top:6px; color:var(--accent); min-height:1em; }
+  .pied { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:4px; }
+  .lien { background:none; border:none; padding:4px 0; color:var(--warn); font-size:.85rem; font-weight:600; text-decoration:underline; cursor:pointer; }
+  .choix { display:flex; gap:8px; margin-bottom:14px; }
+  .choix button { flex:1; }
+  button, .btn { font:inherit; font-weight:600; padding:12px 18px; border-radius:10px; cursor:pointer; border:1.5px solid var(--accent); text-decoration:none; display:inline-block; }
+  .primary { background:var(--accent); color:#fff; } .secondary { background:#fff; color:var(--accent); }
+  .actif { background:var(--accent); color:#fff; }
+  .muted { color:var(--muted); font-size:.9rem; }
+  .semaine { display:flex; gap:6px; margin:0 0 14px; flex-wrap:wrap; }
+  .semaine span { border:1.5px solid var(--accent); border-radius:8px; padding:2px 10px; font-size:.85rem; color:var(--accent); }
+  .semaine span.fait { background:var(--accent); color:#fff; }
+  .nouveau { background:var(--accent-soft); border-radius:10px; padding:10px 12px; margin:8px 0; }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; }
+  td, th { padding:7px 6px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  th { color:var(--muted); font-size:.8rem; }
+  .barre { position:fixed; left:0; right:0; bottom:0; background:var(--bg); border-top:1px solid var(--line); padding:10px 18px; }
+  .barre > div { max-width:720px; margin:0 auto; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  #minuteur { display:none; flex:1 1 100%; white-space:nowrap; font-size:1.1rem; background:var(--ink); color:#fff; border-radius:10px; padding:10px 12px; font-weight:600; justify-content:space-between; align-items:center; }
+  #minuteur.go { background:var(--accent); }
+  #minuteur button { padding:6px 12px; background:#fff; color:var(--ink); border-color:#fff; font-size:.85rem; }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<div class="barre"><div><div id="minuteur"><span id="minuteurTexte"></span><button type="button" id="passer">Passer</button></div><button class="primary" id="valider" style="flex:1">Enregistrer la séance</button></div></div>
+<script src="donnees.js"></script>
+<script src="moteur.js"></script>
+<script src="stockage.js"></script>
+<script>
+  const S = Forme50.stockage;
+  const app = document.getElementById('app');
+  const d = S.lire('bilan');
+  const esc = s => String(s ?? '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+  const kgFr = n => n == null ? '' : String(Math.round(n * 10) / 10).replace('.', ',');
+  const dureeFr = s => s >= 60 ? `${Math.floor(s / 60)} min${s % 60 ? ' ' + String(s % 60).padStart(2, '0') : ''}` : `${s} s`;
+  const aujourdhui = () => { const t = new Date(); t.setMinutes(t.getMinutes() - t.getTimezoneOffset()); return t.toISOString().slice(0, 10); };
+
+  function historique(carnet, id) {
+    return carnet.seances.flatMap(s => s.exos.filter(e => e.id === id && e.series.length).map(e => ({ calibration: e.calibration, series: e.series })));
+  }
+  function semaineCourante(carnet) {
+    if (!carnet.seances.length) return 1;
+    return Math.floor((new Date(aujourdhui()) - new Date(carnet.seances[0].date)) / (7 * 864e5)) + 1;
+  }
+  // Lundi de la semaine en cours (AAAA-MM-JJ)
+  function lundi(dateIso) { const t = new Date(dateIso); t.setDate(t.getDate() - ((t.getDay() + 6) % 7)); return t.toISOString().slice(0, 10); }
+
+  // ---------- Minuteur de repos ----------
+  let finRepos = 0, tic = null;
+  const minuteur = document.getElementById('minuteur'), minuteurTexte = document.getElementById('minuteurTexte');
+  function arreterRepos() { clearInterval(tic); tic = null; minuteur.style.display = 'none'; minuteur.classList.remove('go'); }
+  function lancerRepos(secondes) {
+    clearInterval(tic); finRepos = Date.now() + secondes * 1000;
+    minuteur.style.display = 'flex'; minuteur.classList.remove('go');
+    const maj = () => {
+      const reste = Math.max(0, Math.round((finRepos - Date.now()) / 1000));
+      if (reste > 0) { minuteurTexte.textContent = `Repos : ${Math.floor(reste / 60)}:${String(reste % 60).padStart(2, '0')}`; return; }
+      clearInterval(tic); tic = null;
+      minuteur.classList.add('go'); minuteurTexte.textContent = "C'est reparti : série suivante";
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      setTimeout(() => { if (!tic) arreterRepos(); }, 6000);
+    };
+    maj(); tic = setInterval(maj, 500);
+  }
+  document.getElementById('passer').onclick = arreterRepos;
+
+  let typeChoisi = null;
+  // Recul pour douleur il y a moins de 14 jours sur ce mouvement
+  const apresDouleur = (carnet, motif) => { const n = carnet.niveaux[motif]; return { apresDouleur: !!(n && n.douleur && (new Date(aujourdhui()) - new Date(n.date)) / 864e5 < 14) }; };
+
+  function rendu() {
+    if (!d || !d.objectifs) { app.innerHTML = `<h1>Carnet de séance</h1><section><p>Aucun bilan trouvé.</p><a class="btn primary" href="index.html">Faire le bilan</a></section>`; document.querySelector('.barre').style.display = 'none'; return; }
+    const p = S.programme();
+    const carnet = S.lire('carnet');
+    const derniere = carnet.seances[carnet.seances.length - 1];
+    const type = typeChoisi || (derniere && derniere.type === 'A' ? 'B' : 'A');
+    const seance = p.seances[type];
+    const semaine = semaineCourante(carnet);
+    const nbSeries = Forme50.seriesPourSemaine(semaine);
+    const pr = p.prescription;
+    const prevues = (pr.debut < pr.ensuite && semaine <= 4) ? pr.debut : pr.ensuite;
+    const faites = carnet.seances.filter(s => lundi(s.date) === lundi(aujourdhui())).length;
+
+    const blocs = seance.exercices.map((ex, i) => {
+      const cible = Forme50.prochaineCible(ex, historique(carnet, ex.id), d, apresDouleur(carnet, ex.motif));
+      const unite = ex.unite === 'secondes' ? 's' : 'rép.';
+      const cote = ex.parCote ? ' par côté' : '';
+      const kgLabel = ex.parMain ? 'kg/main' : 'kg';
+      let lignes = '';
+      if (ex.charge) {
+        if (cible.calibration) {
+          lignes += `<div class="serie" data-role="test"><span>Série test</span><label>${kgLabel} <input type="number" inputmode="decimal" step="0.5" min="0" data-k="kg" value="${cible.kg}"></label><label>${unite} <input type="number" inputmode="numeric" min="0" max="50" data-k="reps"></label></div>`;
+          for (let s = 2; s <= nbSeries; s++) lignes += `<div class="serie"><span>Série ${s}</span><label>${kgLabel} <input type="number" inputmode="decimal" step="0.5" min="0" data-k="kg"></label><label>${unite} <input type="number" inputmode="numeric" min="0" max="50" data-k="reps"></label></div>`;
+        } else {
+          for (let s = 1; s <= nbSeries; s++) lignes += `<div class="serie"><span>Série ${s}</span><label>${kgLabel} <input type="number" inputmode="decimal" step="0.5" min="0" data-k="kg" value="${cible.kg}"></label><label>${unite} <input type="number" inputmode="numeric" min="0" max="${ex.reps[1] + 30}" data-k="reps" placeholder="${ex.reps[0]}-${ex.reps[1]}"></label></div>`;
+        }
+      } else {
+        const n = ex.motif === 'equilibre' ? 1 : nbSeries;
+        for (let s = 1; s <= n; s++) lignes += `<div class="serie pdc"><span>Série ${s}</span><label>${unite}${cote} <input type="number" inputmode="numeric" min="0" max="600" data-k="reps" placeholder="${ex.reps[0]}-${ex.reps[1]}"></label></div>`;
+      }
+      const facile = Forme50.variante(ex, -1, d);
+      return `<section data-i="${i}" data-calib="${cible.calibration ? 1 : 0}">
+        <h2>${esc(ex.nom)}</h2><p class="consigne">${esc(ex.consigne)}</p>
+        <p class="cible ${cible.calibration ? 'calib' : ''}">${esc(cible.message)} <b>Objectif : ${ex.reps[0] === ex.reps[1] ? ex.reps[0] : ex.reps[0] + ' à ' + ex.reps[1]} ${ex.unite}${cote}.</b></p>
+        ${lignes}<p class="resultat" data-resultat></p>
+        <div class="pied"><span class="muted">Repos entre les séries : ${dureeFr(ex.repos)}</span>
+        <button type="button" class="lien" data-douleur="${i}">${facile ? 'Douloureux ou trop dur ?' : 'Douloureux ?'}</button></div></section>`;
+    }).join('');
+
+    app.innerHTML = `
+      <h1>Carnet de séance</h1>
+      <p class="sub">Semaine ${semaine} du programme · ${nbSeries} séries par exercice · environ ${seance.duree} minutes</p>
+      <div class="semaine">${Array.from({ length: prevues }, (_, k) => `<span class="${k < faites ? 'fait' : ''}">${k < faites ? '✓ ' : ''}Séance ${k + 1}</span>`).join('')}<span style="border:none;padding:2px 0" class="muted">cette semaine (${pr.debut < pr.ensuite && semaine <= 4 ? 'jours conseillés : ' + pr.joursDebut.join(', ') : 'jours conseillés : ' + pr.joursEnsuite.join(', ')})</span></div>
+      <div class="choix"><button class="${type === 'A' ? 'actif' : 'secondary'}" data-type="A">Séance A</button><button class="${type === 'B' ? 'actif' : 'secondary'}" data-type="B">Séance B</button></div>
+      <section><b>Échauffement (5 minutes)</b><p class="consigne" style="margin:4px 0 0">Marche sur place, cercles de bras et d'épaules, 10 assis-debout lents, quelques rotations du buste. Puis, pour chaque exercice chargé, une série légère de 5 répétitions avec la moitié de la charge.</p></section>
+      <div id="exos">${blocs}</div>
+      <p class="muted">Le minuteur de repos démarre tout seul quand vous notez une série.</p>
+      ${carnet.seances.length ? `<section><h2>Dernières séances</h2><table><thead><tr><th>Date</th><th>Séance</th><th>Exercices notés</th></tr></thead><tbody>
+        ${carnet.seances.slice(-6).reverse().map(s => `<tr><td>${new Date(s.date).toLocaleDateString('fr-FR')}</td><td>${s.type}</td><td>${s.exos.filter(e => e.series.length).length}</td></tr>`).join('')}</tbody></table>
+        <p><button class="secondary" id="annuler">Supprimer la dernière séance</button></p></section>` : ''}
+      <p><a class="btn secondary" href="programme.html">Retour au programme</a></p>`;
+    document.querySelector('.barre').style.display = '';
+
+    app.querySelectorAll('[data-type]').forEach(b => b.onclick = () => { typeChoisi = b.dataset.type; rendu(); });
+
+    // Minuteur : démarre quand une série est notée (sauf la dernière série de l'exercice)
+    app.querySelectorAll('#exos section').forEach(sec => {
+      const ex = seance.exercices[Number(sec.dataset.i)];
+      const champs = [...sec.querySelectorAll('[data-k="reps"]')];
+      champs.forEach((inp, k) => inp.addEventListener('change', () => { if (inp.value && k < champs.length - 1) lancerRepos(ex.repos); }));
+    });
+
+    // Douleur : on passe à la version plus facile, dès cette séance
+    app.querySelectorAll('[data-douleur]').forEach(b => b.onclick = () => {
+      const ex = seance.exercices[Number(b.dataset.douleur)];
+      const facile = Forme50.variante(ex, -1, d);
+      if (!facile) { alert("C'est déjà la version la plus douce. Réduisez l'amplitude du mouvement et allez plus lentement. Si la douleur dépasse 3 sur 10 ou augmente, arrêtez cet exercice et parlez-en à votre médecin."); return; }
+      if (!confirm(`Remplacer « ${ex.nom} » par « ${facile.nom} », plus facile ?\n\nRègle : une gêne légère (moins de 3 sur 10) qui n'augmente pas est acceptable. Une douleur qui monte, on change.`)) return;
+      const c = S.lire('carnet');
+      c.niveaux[ex.motif] = { niveau: facile.niveau, date: aujourdhui(), douleur: true };
+      S.ecrire('carnet', c); rendu(); window.scrollTo({ top: 0 });
+    });
+
+    // Calibration : dès que la série test est remplie, on affiche la charge de travail et on pré-remplit les séries suivantes
+    app.querySelectorAll('section[data-calib="1"]').forEach(sec => {
+      const ex = seance.exercices[Number(sec.dataset.i)];
+      const test = sec.querySelector('[data-role="test"]');
+      const maj = () => {
+        const reps = Number(test.querySelector('[data-k="reps"]').value), poids = Number(test.querySelector('[data-k="kg"]').value);
+        if (!reps || !poids) return;
+        const r = Forme50.prochaineCible(ex, [{ calibration: true, series: [{ reps, kg: poids }] }], d);
+        sec.querySelector('[data-resultat]').textContent = r.message + (r.calibration ? '' : ' Faites les séries suivantes avec cette charge.');
+        sec.querySelectorAll('.serie:not([data-role]) [data-k="kg"]').forEach(inp => { if (!inp.dataset.touche) inp.value = r.kg; });
+      };
+      test.addEventListener('input', maj);
+      sec.querySelectorAll('.serie:not([data-role]) [data-k="kg"]').forEach(inp => inp.addEventListener('input', () => inp.dataset.touche = 1));
+    });
+
+    document.getElementById('valider').onclick = () => {
+      const entree = { date: aujourdhui(), type, exos: [] };
+      app.querySelectorAll('#exos section').forEach(sec => {
+        const ex = seance.exercices[Number(sec.dataset.i)];
+        const lire = row => ({ reps: Number(row.querySelector('[data-k="reps"]').value) || 0, kg: row.querySelector('[data-k="kg"]') ? Number(row.querySelector('[data-k="kg"]').value) || 0 : null });
+        const test = sec.querySelector('[data-role="test"]');
+        if (test) {
+          const t = lire(test);
+          if (t.reps) entree.exos.push({ id: ex.id, calibration: true, series: [t] });
+        }
+        // Une série sans charge notée reprend la charge prévue (calculée depuis la série test, ou la cible du jour)
+        let kgPrevu = null;
+        if (ex.charge) {
+          const t = test ? lire(test) : null;
+          kgPrevu = t && t.reps && t.kg ? Forme50.prochaineCible(ex, [{ calibration: true, series: [t] }], d).kg : Forme50.prochaineCible(ex, historique(S.lire('carnet'), ex.id), d).kg;
+        }
+        const series = [...sec.querySelectorAll('.serie:not([data-role])')].map(lire).filter(s => s.reps > 0).map(s => (ex.charge && !s.kg) ? { ...s, kg: kgPrevu } : s);
+        if (series.length) entree.exos.push({ id: ex.id, series });
+      });
+      if (!entree.exos.length) { alert("Notez au moins une série avant d'enregistrer."); return; }
+      arreterRepos();
+      const c = S.lire('carnet');
+      c.seances.push(entree);
+
+      // Évolution des exercices (§ 28) : variante plus difficile quand c'est maîtrisé, plus facile après deux séances ratées
+      const niveauxActuels = p.seances.niveaux, changements = [];
+      for (const ex of seance.exercices) {
+        if (!entree.exos.some(e => e.id === ex.id)) continue;
+        const cible = Forme50.prochaineCible(ex, historique(c, ex.id), d, apresDouleur(c, ex.motif));
+        const noter = v => { (entree.niveaux ??= []).push({ motif: ex.motif, avant: c.niveaux[ex.motif] ?? null, apres: v }); c.niveaux[ex.motif] = v; };
+        if (cible.suivant && cible.suivant.niveau > niveauxActuels[ex.motif]) {
+          noter({ niveau: cible.suivant.niveau, date: entree.date });
+          changements.push(`« ${cible.suivant.nom} » remplace « ${ex.nom} » : vous avez maîtrisé l'exercice.`);
+        } else if (cible.precedent && ex.niveau === niveauxActuels[ex.motif]) {
+          noter({ niveau: cible.precedent.niveau, date: entree.date });
+          changements.push(`« ${cible.precedent.nom} » remplace « ${ex.nom} » le temps de consolider.`);
+        }
+      }
+      S.ecrire('carnet', c);
+
+      const prochaines = seance.exercices.filter(ex => !changements.some(t => t.includes(`« ${ex.nom} »`))).map(ex => `<li><b>${esc(ex.nom)}</b> : ${esc(Forme50.prochaineCible(ex, historique(c, ex.id), d, apresDouleur(c, ex.motif)).message)}</li>`).join('');
+      const faitesApres = faites + 1;
+      document.querySelector('.barre').style.display = 'none';
+      app.innerHTML = `<h1>Séance enregistrée</h1>
+        <p class="sub">${faitesApres >= prevues ? `Bravo : ${prevues} séance${prevues > 1 ? 's' : ''} sur ${prevues} cette semaine.` : `${faitesApres} séance${faitesApres > 1 ? 's' : ''} sur ${prevues} cette semaine.`}</p>
+        ${changements.length ? `<section><h2>Votre programme évolue</h2>${changements.map(t => `<p class="nouveau">${esc(t)}</p>`).join('')}</section>` : ''}
+        <section><h2>La prochaine fois, sur cette séance</h2><ul>${prochaines}</ul></section>
+        <p><a class="btn primary" href="programme.html">Retour au programme</a> <a class="btn secondary" href="suivi.html">Suivi de la semaine</a></p>`;
+      window.scrollTo({ top: 0 });
+    };
+
+    const annuler = document.getElementById('annuler');
+    if (annuler) annuler.onclick = () => { if (confirm('Supprimer la dernière séance enregistrée ?')) { const c = S.lire('carnet'); const s = c.seances.pop();
+      // On annule les changements d'exercice faits par cette séance, s'ils n'ont pas été modifiés depuis
+      for (const ch of (s && s.niveaux) || []) if (JSON.stringify(c.niveaux[ch.motif]) === JSON.stringify(ch.apres)) { if (ch.avant) c.niveaux[ch.motif] = ch.avant; else delete c.niveaux[ch.motif]; }
+      S.ecrire('carnet', c); rendu(); } };
+  }
+  rendu();
+</script>
+</body>
+</html>
